@@ -78,6 +78,13 @@ resource "aws_security_group" "allow" {
     protocol    = var.security_group.protocol
     cidr_blocks = [var.security_group.cidr_block]
   }
+  ingress {
+    description = "TLS from VPC"
+    from_port   = "80"
+    to_port     = "80"
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   egress {
     from_port        = 0
@@ -101,6 +108,12 @@ resource "aws_instance" "web" {
   depends_on = [
     aws_vpc.ntier-vpc
   ]
+}
+  resource "null_resource" "triggers"{
+    triggers = {
+      running_number = var.name_trigger
+    }
+  
   provisioner "remote-exec" {
     connection {
       type        = "ssh"
@@ -112,6 +125,6 @@ resource "aws_instance" "web" {
       "sudo apt-get update",
       "sudo apt install nginx -y"
     ]
+  
   }
-
 }

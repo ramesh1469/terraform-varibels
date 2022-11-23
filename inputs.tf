@@ -59,3 +59,8 @@ variable "aws_instance" {
     tags                        = string
   })
 }
+
+variable "name_trigger" {
+  type = string
+  default = "1.0"
+}
