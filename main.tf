@@ -128,3 +128,91 @@ resource "aws_instance" "web" {
   
   }
 }
+
+resource "aws_instance" "app" {
+  ami                         = var.aws_instance.ami
+  instance_type               = var.aws_instance.instance_type
+  subnet_id                   = aws_subnet.aws_subnet[1].id
+  vpc_security_group_ids      = [aws_security_group.allow.id]
+  associate_public_ip_address = var.aws_instance.associate_public_ip_address
+  key_name                    = var.aws_instance.key_name
+  
+  depends_on = [
+    aws_vpc.ntier-vpc
+  ]
+}
+  resource "null_resource" "trigger"{
+    triggers = {
+      running_number = var.name_trigger
+    }
+  
+  provisioner "remote-exec" {
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = file("~/.ssh/id_rsa")
+      host        = aws_instance.app.public_ip
+    }
+    inline = [
+      "sudo apt-get update",
+      "sudo apt install apache2  -y"
+    ]
+  
+  }
+}
+# Creating Network load balancer
+resource "aws_lb" "my_loadlb" {
+    name                         = "networkload"
+    internal                     = false
+    load_balancer_type           = "network"
+    subnets                      = [aws_subnet.aws_subnet[0].id]
+    ip_address_type              = "ipv4"
+    enable_deletion_protection   = false
+    depends_on = [
+      aws_lb_target_group.awstgt
+    ]
+}
+
+# Creating Target group for load balancer
+resource "aws_lb_target_group" "awstgt" {
+    name                    = "tgtgroup"
+    port                    = 80
+    protocol                = "TCP"
+    target_type             = "instance"
+    ip_address_type         = "ipv4"
+    vpc_id                  = aws_vpc.ntier-vpc.id
+    health_check {
+       port                 = 80
+       protocol             = "TCP"
+       healthy_threshold    = 3
+       interval             = 10
+    }
+    depends_on = [
+      aws_instance.web
+    ]
+}
+
+# Creating Listner Group
+resource "aws_lb_listener" "awslistener" {
+    load_balancer_arn       = aws_lb.my_loadlb.arn
+    port                    = 80
+    protocol                = "TCP"
+    default_action {
+      type                  = "forward"
+      target_group_arn      = aws_instance.web.id
+    }
+    depends_on = [
+      aws_lb_target_group.awstgt
+    ]
+}
+
+# target_group_attachment to listner
+resource "aws_lb_target_group_attachment" "attach" {
+    count                   = 2
+    target_group_arn        = aws_lb_target_group.awstgt.arn
+    target_id               = aws_instance.web.id
+    port                    = 80
+    depends_on = [
+     aws_instance.app
+    ]
+}
